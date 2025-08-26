@@ -15,7 +15,8 @@
                 <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
                 <button class="nav-btn" data-tab="leaderboard">Leaderboard</button>
                 <button class="nav-btn" data-tab="players">Players</button>
-                <button class="nav-btn" data-tab="matches">Matches</button>
+                <button class="nav-btn" data-tab="report">Report Match</button>
+                <button class="nav-btn" data-tab="matches">Match History</button>
                 <button class="nav-btn" data-tab="matchmaking">Queue</button>
             </nav>
         </div>
@@ -37,7 +38,7 @@
                 </div>
                 <div class="stat-card">
                     <i class="fas fa-trophy"></i>
-                    <h3>Completed This Week</h3>
+                    <h3>Completed Matches</h3>
                     <div class="stat-number" id="completedMatches">0</div>
                 </div>
             </div>
@@ -79,24 +80,29 @@
             </div>
         </div>
 
-        <!-- Matches Tab -->
-        <div id="matches" class="tab-content">
-            <div class="matches-header">
-                <h2><i class="fas fa-swords"></i> Match Management</h2>
-                <div class="match-controls">
-                    <button class="btn btn-primary" onclick="showCreateMatchModal()">
-                        <i class="fas fa-plus"></i> Create Match
-                    </button>
-                    <select id="matchFilter">
-                        <option value="all">All Matches</option>
-                        <option value="pending">Pending Only</option>
-                        <option value="completed">Completed Only</option>
-                    </select>
-                </div>
+        <!-- Report Match Tab -->
+        <div id="report" class="tab-content">
+            <div class="report-header">
+                <h2><i class="fas fa-clipboard-check"></i> Report Match Results</h2>
+                <button class="btn btn-primary" onclick="showCreateMatchModal()">
+                    <i class="fas fa-plus"></i> Create New Match
+                </button>
             </div>
             
+            <!-- Pending Matches -->
+            <div class="pending-matches-section">
+                <h3><i class="fas fa-clock"></i> Pending Matches</h3>
+                <div id="pendingMatchesList" class="matches-list">
+                    <!-- Pending matches will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Match History Tab -->
+        <div id="matches" class="tab-content">
+            <h2><i class="fas fa-history"></i> Match History</h2>
             <div class="matches-section" id="matchesSection">
-                <!-- Matches will be displayed here -->
+                <!-- Recent matches will be shown here -->
             </div>
         </div>
 
@@ -196,23 +202,14 @@
             <h2>Create New Match</h2>
             <form id="createMatchForm">
                 <div class="form-group">
-                    <label for="matchOffice">Office:</label>
-                    <select id="matchOffice" required onchange="loadPlayersForMatch()">
-                        <option value="">Select Office</option>
-                        <option value="chicago">Chicago</option>
-                        <option value="new york">New York</option>
-                        <option value="tempe">Tempe</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="matchPlayer1">Player 1:</label>
-                    <select id="matchPlayer1" required onchange="updatePlayer2Options()">
+                    <label for="player1Select">Player 1:</label>
+                    <select id="player1Select" required>
                         <option value="">Select Player 1</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="matchPlayer2">Player 2:</label>
-                    <select id="matchPlayer2" required>
+                    <label for="player2Select">Player 2:</label>
+                    <select id="player2Select" required>
                         <option value="">Select Player 2</option>
                     </select>
                 </div>
@@ -226,22 +223,26 @@
         <div class="modal-content">
             <span class="close" onclick="hideReportMatchModal()">&times;</span>
             <h2>Report Match Result</h2>
-            <div id="reportMatchContent">
+            <div id="reportMatchDetails" class="match-details">
                 <!-- Match details will be populated here -->
             </div>
             <form id="reportMatchForm">
                 <input type="hidden" id="reportMatchId">
                 <div class="form-group">
-                    <label>Winner:</label>
+                    <label>Who won the match?</label>
                     <div class="winner-selection" id="winnerSelection">
                         <!-- Winner options will be populated here -->
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="matchNotes">Notes (optional):</label>
-                    <textarea id="matchNotes" placeholder="Any additional notes about the match..."></textarea>
+                    <label for="reportedBySelect">Reported by:</label>
+                    <select id="reportedBySelect" required>
+                        <option value="">Select who is reporting</option>
+                    </select>
                 </div>
-                <button type="submit" class="btn btn-primary">Report Result</button>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-check"></i> Report Result
+                </button>
             </form>
         </div>
     </div>
