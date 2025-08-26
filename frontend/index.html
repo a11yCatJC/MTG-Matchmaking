@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ MTG Tournament System</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1><i class="fas fa-magic"></i> MTG Tournament System</h1>
+            <nav>
+                <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+                <button class="nav-btn" data-tab="leaderboard">Leaderboard</button>
+                <button class="nav-btn" data-tab="players">Players</button>
+                <button class="nav-btn" data-tab="matchmaking">Queue</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <i class="fas fa-users"></i>
+                    <h3>Total Players</h3>
+                    <div class="stat-number" id="totalPlayers">0</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-gamepad"></i>
+                    <h3>Active Matches</h3>
+                    <div class="stat-number" id="activeMatches">0</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-trophy"></i>
+                    <h3>Prizes Awarded</h3>
+                    <div class="stat-number" id="prizesAwarded">0</div>
+                </div>
+            </div>
+
+            <div class="office-overview">
+                <h2><i class="fas fa-building"></i> Office Overview</h2>
+                <div class="office-grid" id="officeGrid">
+                    <!-- Office cards will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Tab -->
+        <div id="leaderboard" class="tab-content">
+            <div class="leaderboard-controls">
+                <h2><i class="fas fa-medal"></i> Leaderboard</h2>
+                <select id="officeFilter">
+                    <option value="">All Offices</option>
+                    <option value="chicago">Chicago</option>
+                    <option value="new york">New York</option>
+                    <option value="tempe">Tempe</option>
+                </select>
+            </div>
+            <div class="leaderboard-table" id="leaderboardTable">
+                <!-- Leaderboard will be populated here -->
+            </div>
+        </div>
+
+        <!-- Players Tab -->
+        <div id="players" class="tab-content">
+            <div class="players-header">
+                <h2><i class="fas fa-user-friends"></i> Players</h2>
+                <button class="btn btn-primary" onclick="showAddPlayerModal()">
+                    <i class="fas fa-plus"></i> Add Player
+                </button>
+            </div>
+            <div class="players-grid" id="playersGrid">
+                <!-- Players will be populated here -->
+            </div>
+        </div>
+
+        <!-- Matchmaking Queue Tab -->
+        <div id="matchmaking" class="tab-content">
+            <h2><i class="fas fa-clock"></i> Matchmaking Queue</h2>
+            <div class="queue-section" id="queueSection">
+                <!-- Queue status will be shown here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Player Modal -->
+    <div id="addPlayerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideAddPlayerModal()">&times;</span>
+            <h2>Add New Player</h2>
+            <form id="addPlayerForm">
+                <div class="form-group">
+                    <label for="playerName">Name:</label>
+                    <input type="text" id="playerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="playerEmail">Email:</label>
+                    <input type="email" id="playerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="playerSlack">Slack User ID:</label>
+                    <input type="text" id="playerSlack" placeholder="U01234567">
+                </div>
+                <div class="form-group">
+                    <label for="playerOffice">Office:</label>
+                    <select id="playerOffice" required>
+                        <option value="chicago">Chicago</option>
+                        <option value="new york">New York</option>
+                        <option value="tempe">Tempe</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Player</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
