@@ -626,3 +626,311 @@ nav {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* ... (keep all existing styles) ... */
+
+/* Match Management Styles */
+.matches-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.matches-header h2 {
+    color: white;
+}
+
+.match-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.match-controls select {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: none;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.match-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.match-item {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.match-item:hover {
+    transform: translateY(-2px);
+}
+
+.match-item.pending {
+    border-left: 4px solid #ffc107;
+}
+
+.match-item.completed {
+    border-left: 4px solid #28a745;
+}
+
+.match-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.match-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.match-status.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.match-status.completed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.match-players-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 1rem 0;
+}
+
+.match-player-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.match-vs {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #764ba2;
+    margin: 0 1rem;
+}
+
+.match-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    justify-content: flex-end;
+}
+
+.btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-warning {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-warning:hover {
+    background: #e0a800;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+/* Winner Selection Styles */
+.winner-selection {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.winner-option {
+    flex: 1;
+    padding: 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.winner-option:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.winner-option.selected {
+    border-color: #667eea;
+    background: #667eea;
+    color: white;
+}
+
+.winner-option input[type="radio"] {
+    display: none;
+}
+
+.winner-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.winner-player img,
+.winner-player .default-avatar {
+    width: 60px;
+    height: 60px;
+}
+
+/* Match Creation Styles */
+.form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+/* Match Stats */
+.match-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 0.5rem;
+}
+
+.match-date {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Prize notification */
+.prize-notification {
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+    color: #8b5a00;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-top: 1rem;
+    text-align: center;
+    font-weight: bold;
+    animation: prizeGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes prizeGlow {
+    from { box-shadow: 0 4px 20px rgba(255, 215, 0, 0.3); }
+    to { box-shadow: 0 4px 20px rgba(255, 215, 0, 0.6); }
+}
+
+/* Empty state for matches */
+.matches-empty {
+    text-align: center;
+    padding: 3rem;
+    color: #666;
+}
+
+.matches-empty i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* Loading states */
+.matches-loading {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+}
+
+.matches-loading i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    animation: spin 1s linear infinite;
+}
+
+/* Responsive design for matches */
+@media (max-width: 768px) {
+    .matches-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .match-controls {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .match-controls select {
+        width: 100%;
+    }
+    
+    .match-players-section {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .match-vs {
+        order: 1;
+        margin: 0;
+    }
+    
+    .winner-selection {
+        flex-direction: column;
+    }
+    
+    .match-actions {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+}
+
+/* Textarea styles */
+textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Match filter active states */
+.match-filter-active {
+    background: #667eea !important;
+    color: white !important;
+}
