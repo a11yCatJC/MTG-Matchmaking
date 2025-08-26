@@ -23,7 +23,7 @@ class Database {
         )
       `);
 
-      // Matches table
+      // Enhanced Matches table
       this.db.run(`
         CREATE TABLE IF NOT EXISTS matches (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,9 +33,12 @@ class Database {
           match_date DATETIME DEFAULT CURRENT_TIMESTAMP,
           week_start DATE,
           status TEXT DEFAULT 'pending',
+          reported_by INTEGER,
+          notes TEXT,
           FOREIGN KEY (player1_id) REFERENCES players(id),
           FOREIGN KEY (player2_id) REFERENCES players(id),
-          FOREIGN KEY (winner_id) REFERENCES players(id)
+          FOREIGN KEY (winner_id) REFERENCES players(id),
+          FOREIGN KEY (reported_by) REFERENCES players(id)
         )
       `);
 
@@ -63,10 +66,21 @@ class Database {
         )
       `);
 
-      // Check if avatar_url column exists, add it if it doesn't
+      // Add new columns if they don't exist
       this.db.all("PRAGMA table_info(players)", (err, columns) => {
         if (!err && !columns.find(col => col.name === 'avatar_url')) {
           this.db.run("ALTER TABLE players ADD COLUMN avatar_url TEXT");
+        }
+      });
+
+      this.db.all("PRAGMA table_info(matches)", (err, columns) => {
+        if (!err) {
+          if (!columns.find(col => col.name === 'reported_by')) {
+            this.db.run("ALTER TABLE matches ADD COLUMN reported_by INTEGER");
+          }
+          if (!columns.find(col => col.name === 'notes')) {
+            this.db.run("ALTER TABLE matches ADD COLUMN notes TEXT");
+          }
         }
       });
 
@@ -92,17 +106,40 @@ class Database {
           stmt.run(player);
         });
         stmt.finalize();
+
+        // Add some sample matches
+        setTimeout(() => {
+          this.createSampleMatches();
+        }, 100);
       }
     });
   }
 
+  createSampleMatches() {
+    const sampleMatches = [
+      [1, 2, 1, 'completed'], // Alice beats Bob
+      [3, 4, 4, 'completed'], // David beats Carol
+      [5, 6, 5, 'completed'], // Eve beats Frank
+      [1, 2, null, 'pending'], // Alice vs Bob (pending)
+      [3, 4, null, 'pending'], // Carol vs David (pending)
+    ];
+
+    const weekStart = this.getWeekStart(new Date());
+    const stmt = this.db.prepare("INSERT INTO matches (player1_id, player2_id, winner_id, status, week_start) VALUES (?, ?, ?, ?, ?)");
+    
+    sampleMatches.forEach(match => {
+      stmt.run([...match, weekStart]);
+    });
+    stmt.finalize();
+  }
+
   // Player methods
   getAllPlayers(callback) {
-    this.db.all("SELECT * FROM players WHERE is_active = 1", callback);
+    this.db.all("SELECT * FROM players WHERE is_active = 1 ORDER BY name", callback);
   }
 
   getPlayersByOffice(office, callback) {
-    this.db.all("SELECT * FROM players WHERE office = ? AND is_active = 1", [office], callback);
+    this.db.all("SELECT * FROM players WHERE office = ? AND is_active = 1 ORDER BY name", [office], callback);
   }
 
   getPlayerById(id, callback) {
@@ -155,12 +192,24 @@ class Database {
     this.db.run("DELETE FROM matchmaking_queue WHERE player_id = ?", [playerId], callback);
   }
 
+  isPlayerInQueue(playerId, callback) {
+    this.db.get(
+      "SELECT COUNT(*) as count FROM matchmaking_queue WHERE player_id = ?",
+      [playerId],
+      (err, row) => {
+        if (err) return callback(err);
+        callback(null, row.count > 0);
+      }
+    );
+  }
+
   getQueueByOffice(office, callback) {
     this.db.all(`
       SELECT mq.*, p.name, p.slack_user_id, p.avatar_url
       FROM matchmaking_queue mq 
       JOIN players p ON mq.player_id = p.id 
       WHERE mq.office = ?
+      ORDER BY mq.joined_at
     `, [office], callback);
   }
 
@@ -174,15 +223,89 @@ class Database {
     );
   }
 
-  reportMatch(matchId, winnerId, callback) {
+  getMatchById(matchId, callback) {
+    this.db.get(`
+      SELECT 
+        m.*,
+        p1.name as player1_name,
+        p1.avatar_url as player1_avatar,
+        p1.office as office,
+        p2.name as player2_name,
+        p2.avatar_url as player2_avatar,
+        winner.name as winner_name,
+        winner.avatar_url as winner_avatar,
+        reporter.name as reported_by_name
+      FROM matches m
+      JOIN players p1 ON m.player1_id = p1.id
+      JOIN players p2 ON m.player2_id = p2.id
+      LEFT JOIN players winner ON m.winner_id = winner.id
+      LEFT JOIN players reporter ON m.reported_by = reporter.id
+      WHERE m.id = ?
+    `, [matchId], callback);
+  }
+
+  getPendingMatches(callback) {
+    this.db.all(`
+      SELECT 
+        m.*,
+        p1.name as player1_name,
+        p1.avatar_url as player1_avatar,
+        p1.office as office,
+        p2.name as player2_name,
+        p2.avatar_url as player2_avatar
+      FROM matches m
+      JOIN players p1 ON m.player1_id = p1.id
+      JOIN players p2 ON m.player2_id = p2.id
+      WHERE m.status = 'pending'
+      ORDER BY m.match_date DESC
+    `, callback);
+  }
+
+  getMatchesByPlayer(playerId, callback) {
+    this.db.all(`
+      SELECT 
+        m.*,
+        p1.name as player1_name,
+        p1.avatar_url as player1_avatar,
+        p2.name as player2_name,
+        p2.avatar_url as player2_avatar,
+        winner.name as winner_name,
+        winner.avatar_url as winner_avatar
+      FROM matches m
+      JOIN players p1 ON m.player1_id = p1.id
+      JOIN players p2 ON m.player2_id = p2.id
+      LEFT JOIN players winner ON m.winner_id = winner.id
+      WHERE m.player1_id = ? OR m.player2_id = ?
+      ORDER BY m.match_date DESC
+    `, [playerId, playerId], callback);
+  }
+
+  reportMatch(matchId, winnerId, reportedBy, callback) {
     this.db.run(
-      "UPDATE matches SET winner_id = ?, status = 'completed' WHERE id = ?",
-      [winnerId, matchId],
+      "UPDATE matches SET winner_id = ?, status = 'completed', reported_by = ? WHERE id = ?",
+      [winnerId, reportedBy, matchId],
       (err) => {
         if (err) return callback(err);
         this.checkPrizeEligibility(winnerId, callback);
       }
     );
+  }
+
+  deleteMatch(matchId, callback) {
+    this.db.run("DELETE FROM matches WHERE id = ? AND status = 'pending'", [matchId], callback);
+  }
+
+  getPlayerMatchStats(playerId, weekStart, callback) {
+    this.db.get(`
+      SELECT 
+        COUNT(*) as total_matches,
+        COUNT(CASE WHEN winner_id = ? THEN 1 END) as wins,
+        COUNT(CASE WHEN winner_id != ? AND winner_id IS NOT NULL THEN 1 END) as losses,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_matches
+      FROM matches 
+      WHERE (player1_id = ? OR player2_id = ?) 
+      AND week_start = ?
+    `, [playerId, playerId, playerId, playerId, weekStart], callback);
   }
 
   getWeeklyStats(playerId, weekStart, callback) {
@@ -248,7 +371,7 @@ class Database {
         p.avatar_url,
         COUNT(CASE WHEN m.winner_id = p.id THEN 1 END) as wins,
         COUNT(CASE WHEN (m.player1_id = p.id OR m.player2_id = p.id) AND m.winner_id != p.id AND m.winner_id IS NOT NULL THEN 1 END) as losses,
-        COUNT(CASE WHEN m.player1_id = p.id OR m.player2_id = p.id THEN 1 END) as total_games
+        COUNT(CASE WHEN m.player1_id = p.id OR m.player2_id = p.id AND m.status = 'completed' THEN 1 END) as total_games
       FROM players p
       LEFT JOIN matches m ON (p.id = m.player1_id OR p.id = m.player2_id) AND m.status = 'completed'
       WHERE p.is_active = 1
@@ -283,6 +406,26 @@ class Database {
       ORDER BY m.match_date DESC
       LIMIT ?
     `, [limit], callback);
+  }
+
+  getAllMatches(callback) {
+    this.db.all(`
+      SELECT 
+        m.*,
+        p1.name as player1_name,
+        p1.avatar_url as player1_avatar,
+        p2.name as player2_name,
+        p2.avatar_url as player2_avatar,
+        winner.name as winner_name,
+        winner.avatar_url as winner_avatar,
+        reporter.name as reported_by_name
+      FROM matches m
+      JOIN players p1 ON m.player1_id = p1.id
+      JOIN players p2 ON m.player2_id = p2.id
+      LEFT JOIN players winner ON m.winner_id = winner.id
+      LEFT JOIN players reporter ON m.reported_by = reporter.id
+      ORDER BY m.match_date DESC
+    `, callback);
   }
 }
 
