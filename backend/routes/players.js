@@ -1,4 +1,3 @@
-```javascript
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
@@ -47,4 +46,3 @@ router.get('/leaderboard/:office?', (req, res) => {
 });
 
 module.exports = router;
-```
