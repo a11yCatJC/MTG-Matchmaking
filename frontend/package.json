@@ -1,0 +1,12 @@
+{
+  "name": "mtg-tournament-frontend",
+  "version": "1.0.0",
+  "description": "MTG Tournament System Frontend",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server . -p 8080"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  }
+}
