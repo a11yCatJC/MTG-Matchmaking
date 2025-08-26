@@ -1,4 +1,3 @@
-
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
@@ -10,7 +9,7 @@ class Database {
 
   init() {
     this.db.serialize(() => {
-      // Players table
+      // Players table with avatar_url
       this.db.run(`
         CREATE TABLE IF NOT EXISTS players (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,6 +17,7 @@ class Database {
           email TEXT,
           slack_user_id TEXT UNIQUE,
           office TEXT NOT NULL,
+          avatar_url TEXT,
           join_date DATETIME DEFAULT CURRENT_TIMESTAMP,
           is_active BOOLEAN DEFAULT 1
         )
@@ -63,6 +63,13 @@ class Database {
         )
       `);
 
+      // Check if avatar_url column exists, add it if it doesn't
+      this.db.all("PRAGMA table_info(players)", (err, columns) => {
+        if (!err && !columns.find(col => col.name === 'avatar_url')) {
+          this.db.run("ALTER TABLE players ADD COLUMN avatar_url TEXT");
+        }
+      });
+
       // Insert sample data
       this.insertSampleData();
     });
@@ -70,17 +77,17 @@ class Database {
 
   insertSampleData() {
     const samplePlayers = [
-      ['Alice Johnson', 'alice@company.com', 'U01234567', 'chicago'],
-      ['Bob Smith', 'bob@company.com', 'U01234568', 'chicago'],
-      ['Carol Davis', 'carol@company.com', 'U01234569', 'new york'],
-      ['David Wilson', 'david@company.com', 'U01234570', 'new york'],
-      ['Eve Brown', 'eve@company.com', 'U01234571', 'tempe'],
-      ['Frank Miller', 'frank@company.com', 'U01234572', 'tempe']
+      ['Alice Johnson', 'alice@company.com', 'U01234567', 'chicago', null],
+      ['Bob Smith', 'bob@company.com', 'U01234568', 'chicago', null],
+      ['Carol Davis', 'carol@company.com', 'U01234569', 'new york', null],
+      ['David Wilson', 'david@company.com', 'U01234570', 'new york', null],
+      ['Eve Brown', 'eve@company.com', 'U01234571', 'tempe', null],
+      ['Frank Miller', 'frank@company.com', 'U01234572', 'tempe', null]
     ];
 
     this.db.get("SELECT COUNT(*) as count FROM players", (err, row) => {
       if (row.count === 0) {
-        const stmt = this.db.prepare("INSERT INTO players (name, email, slack_user_id, office) VALUES (?, ?, ?, ?)");
+        const stmt = this.db.prepare("INSERT INTO players (name, email, slack_user_id, office, avatar_url) VALUES (?, ?, ?, ?, ?)");
         samplePlayers.forEach(player => {
           stmt.run(player);
         });
@@ -98,15 +105,39 @@ class Database {
     this.db.all("SELECT * FROM players WHERE office = ? AND is_active = 1", [office], callback);
   }
 
+  getPlayerById(id, callback) {
+    this.db.get("SELECT * FROM players WHERE id = ?", [id], callback);
+  }
+
   getPlayerBySlackId(slackId, callback) {
     this.db.get("SELECT * FROM players WHERE slack_user_id = ?", [slackId], callback);
   }
 
   addPlayer(player, callback) {
-    const { name, email, slack_user_id, office } = player;
+    const { name, email, slack_user_id, office, avatar_url } = player;
     this.db.run(
-      "INSERT INTO players (name, email, slack_user_id, office) VALUES (?, ?, ?, ?)",
-      [name, email, slack_user_id, office],
+      "INSERT INTO players (name, email, slack_user_id, office, avatar_url) VALUES (?, ?, ?, ?, ?)",
+      [name, email, slack_user_id, office, avatar_url],
+      callback
+    );
+  }
+
+  updatePlayerAvatar(playerId, avatarUrl, callback) {
+    this.db.run(
+      "UPDATE players SET avatar_url = ? WHERE id = ?",
+      [avatarUrl, playerId],
+      callback
+    );
+  }
+
+  updatePlayer(playerId, updates, callback) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    values.push(playerId);
+    
+    this.db.run(
+      `UPDATE players SET ${fields} WHERE id = ?`,
+      values,
       callback
     );
   }
@@ -126,7 +157,7 @@ class Database {
 
   getQueueByOffice(office, callback) {
     this.db.all(`
-      SELECT mq.*, p.name, p.slack_user_id 
+      SELECT mq.*, p.name, p.slack_user_id, p.avatar_url
       FROM matchmaking_queue mq 
       JOIN players p ON mq.player_id = p.id 
       WHERE mq.office = ?
@@ -211,8 +242,10 @@ class Database {
   getLeaderboard(office, callback) {
     let query = `
       SELECT 
+        p.id,
         p.name,
         p.office,
+        p.avatar_url,
         COUNT(CASE WHEN m.winner_id = p.id THEN 1 END) as wins,
         COUNT(CASE WHEN (m.player1_id = p.id OR m.player2_id = p.id) AND m.winner_id != p.id AND m.winner_id IS NOT NULL THEN 1 END) as losses,
         COUNT(CASE WHEN m.player1_id = p.id OR m.player2_id = p.id THEN 1 END) as total_games
@@ -231,7 +264,26 @@ class Database {
     
     this.db.all(query, params, callback);
   }
+
+  getRecentMatches(limit = 10, callback) {
+    this.db.all(`
+      SELECT 
+        m.*,
+        p1.name as player1_name,
+        p1.avatar_url as player1_avatar,
+        p2.name as player2_name,
+        p2.avatar_url as player2_avatar,
+        winner.name as winner_name,
+        winner.avatar_url as winner_avatar
+      FROM matches m
+      JOIN players p1 ON m.player1_id = p1.id
+      JOIN players p2 ON m.player2_id = p2.id
+      LEFT JOIN players winner ON m.winner_id = winner.id
+      WHERE m.status = 'completed'
+      ORDER BY m.match_date DESC
+      LIMIT ?
+    `, [limit], callback);
+  }
 }
 
 module.exports = new Database();
-
