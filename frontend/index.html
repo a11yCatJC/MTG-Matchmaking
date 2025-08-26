@@ -16,6 +16,7 @@
                 <button class="nav-btn" data-tab="leaderboard">Leaderboard</button>
                 <button class="nav-btn" data-tab="players">Players</button>
                 <button class="nav-btn" data-tab="matchmaking">Queue</button>
+                <button class="nav-btn" data-tab="matches">Recent Matches</button>
             </nav>
         </div>
     </header>
@@ -85,6 +86,14 @@
                 <!-- Queue status will be shown here -->
             </div>
         </div>
+
+        <!-- Recent Matches Tab -->
+        <div id="matches" class="tab-content">
+            <h2><i class="fas fa-history"></i> Recent Matches</h2>
+            <div class="matches-section" id="matchesSection">
+                <!-- Recent matches will be shown here -->
+            </div>
+        </div>
     </main>
 
     <!-- Add Player Modal -->
@@ -114,6 +123,55 @@
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary">Add Player</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Player Modal -->
+    <div id="editPlayerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideEditPlayerModal()">&times;</span>
+            <h2>Edit Player</h2>
+            
+            <!-- Avatar Upload Section -->
+            <div class="avatar-section">
+                <div class="current-avatar">
+                    <img id="currentAvatar" src="" alt="Current Avatar" class="avatar-preview">
+                </div>
+                <div class="avatar-controls">
+                    <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('avatarInput').click()">
+                        <i class="fas fa-camera"></i> Change Avatar
+                    </button>
+                    <button type="button" class="btn btn-danger" id="deleteAvatarBtn" onclick="deleteAvatar()">
+                        <i class="fas fa-trash"></i> Remove
+                    </button>
+                </div>
+            </div>
+
+            <form id="editPlayerForm">
+                <input type="hidden" id="editPlayerId">
+                <div class="form-group">
+                    <label for="editPlayerName">Name:</label>
+                    <input type="text" id="editPlayerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="editPlayerEmail">Email:</label>
+                    <input type="email" id="editPlayerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="editPlayerSlack">Slack User ID:</label>
+                    <input type="text" id="editPlayerSlack" placeholder="U01234567">
+                </div>
+                <div class="form-group">
+                    <label for="editPlayerOffice">Office:</label>
+                    <select id="editPlayerOffice" required>
+                        <option value="chicago">Chicago</option>
+                        <option value="new york">New York</option>
+                        <option value="tempe">Tempe</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Update Player</button>
             </form>
         </div>
     </div>
