@@ -169,3 +169,68 @@ MIT License - see LICENSE file for details
 ✅ **Matchmaking queue system**
 
 The app is fully functional with a beautiful UI and can be extended with additional features like real-time updates, more sophisticated matchmaking, and enhanced Slack integration.
+
+
+
+New Features Added
+✅ Profile Picture Upload
+
+File upload with drag-and-drop interface
+Image validation (type and size limits)
+Automatic thumbnail generation
+Avatar preview in edit modal
+
+✅ Avatar Display
+
+Player avatars in leaderboard with fallback initials
+Profile pictures in player cards
+Avatars in match history
+Default avatar with player initials
+
+✅ Avatar Management
+
+Upload new avatars
+Replace existing avatars
+Delete avatars
+File cleanup on server
+
+✅ Enhanced UI
+
+New "Recent Matches" tab showing match history with avatars
+Edit player functionality
+Improved player cards with avatars
+Better responsive design for avatars
+
+✅ Backend Improvements
+
+File upload handling with Multer
+Avatar storage and serving
+Database schema updates
+Enhanced API endpoints
+
+Setup Instructions for New Features
+
+Install new dependencies:
+bashCopycd backend
+npm install multer path
+
+Create uploads directory:
+bashCopymkdir -p backend/uploads/avatars
+
+Run the updated application:
+bashCopy# Backend
+cd backend && npm start
+
+# Frontend  
+cd frontend && npm start
+
+Test avatar upload:
+
+Go to Players tab
+Click "Edit" on any player
+Upload a profile picture
+See it displayed throughout the app
+
+
+
+The avatar system is fully functional with proper validation, storage, and display across all screens including the leaderboard!
