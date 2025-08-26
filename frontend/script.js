@@ -3,8 +3,8 @@ const API_BASE = 'http://localhost:3000/api';
 // Global state
 let currentTab = 'dashboard';
 let players = [];
-let matches = [];
 let leaderboard = [];
+let pendingMatches = [];
 let currentEditingPlayer = null;
 let currentReportingMatch = null;
 
@@ -28,13 +28,9 @@ function setupEventListeners() {
         });
     });
 
-    // Filters
-    document.getElementById('officeFilter')?.addEventListener('change', (e) => {
+    // Office filter
+    document.getElementById('officeFilter').addEventListener('change', (e) => {
         loadLeaderboard(e.target.value);
-    });
-
-    document.getElementById('matchFilter')?.addEventListener('change', (e) => {
-        filterMatches(e.target.value);
     });
 
     // Forms
@@ -55,24 +51,12 @@ function setupModalCloseEvents() {
     
     modals.forEach(modalId => {
         const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.addEventListener('click', (e) => {
-                if (e.target === e.currentTarget) {
-                    hideModal(modalId);
-                }
-            });
-        }
+        modal.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                hideModal(modalId);
+            }
+        });
     });
-}
-
-function hideModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.style.display = 'none';
-        // Reset forms
-        const form = modal.querySelector('form');
-        if (form) form.reset();
-    }
 }
 
 function showTab(tabName) {
@@ -99,8 +83,11 @@ function showTab(tabName) {
         case 'players':
             loadPlayers();
             break;
+        case 'report':
+            loadPendingMatches();
+            break;
         case 'matches':
-            loadMatches();
+            loadRecentMatches();
             break;
         case 'matchmaking':
             loadMatchmakingQueue();
@@ -110,18 +97,19 @@ function showTab(tabName) {
 
 async function loadDashboardData() {
     try {
-        const [playersResponse, matchesResponse, leaderboardResponse] = await Promise.all([
+        const [playersResponse, leaderboardResponse, pendingMatchesResponse] = await Promise.all([
             fetch(`${API_BASE}/players`),
-            fetch(`${API_BASE}/matches/pending`),
-            fetch(`${API_BASE}/players/leaderboard`)
+            fetch(`${API_BASE}/players/leaderboard`),
+            fetch(`${API_BASE}/matches/pending`)
         ]);
 
         const playersData = await playersResponse.json();
-        const pendingMatches = await matchesResponse.json();
         const leaderboardData = await leaderboardResponse.json();
+        const pendingMatchesData = await pendingMatchesResponse.json();
 
         players = playersData;
-        updateDashboardStats(playersData, pendingMatches, leaderboardData);
+        pendingMatches = pendingMatchesData;
+        updateDashboardStats(playersData, leaderboardData, pendingMatchesData);
         updateOfficeOverview(playersData);
     } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -129,10 +117,13 @@ async function loadDashboardData() {
     }
 }
 
-function updateDashboardStats(players, pendingMatches, leaderboard) {
+function updateDashboardStats(players, leaderboard, pendingMatches) {
     document.getElementById('totalPlayers').textContent = players.length;
     document.getElementById('pendingMatches').textContent = pendingMatches.length;
-    document.getElementById('completedMatches').textContent = '0'; // This would need a separate API call
+    
+    // Calculate completed matches from leaderboard data
+    const completedMatches = leaderboard.reduce((total, player) => total + player.total_games, 0) / 2;
+    document.getElementById('completedMatches').textContent = Math.floor(completedMatches);
 }
 
 function updateOfficeOverview(players) {
@@ -141,6 +132,10 @@ function updateOfficeOverview(players) {
     
     officeGrid.innerHTML = offices.map(office => {
         const officePlayers = players.filter(p => p.office === office);
+        const officePendingMatches = pendingMatches.filter(m => 
+            officePlayers.some(p => p.id === m.player1_id || p.id === m.player2_id)
+        );
+        
         return `
             <div class="office-card">
                 <h3><i class="fas fa-building"></i> ${office.replace(' ', ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
@@ -153,355 +148,230 @@ function updateOfficeOverview(players) {
                     <strong>${officePlayers.filter(p => p.is_active).length}</strong>
                 </div>
                 <div class="office-stat">
-                    <span>In Queue:</span>
-                    <strong>0</strong>
+                    <span>Pending Matches:</span>
+                    <strong>${officePendingMatches.length}</strong>
                 </div>
             </div>
         `;
     }).join('');
 }
 
-// Match Management Functions
-async function loadMatches() {
+// Match Reporting Functions
+async function loadPendingMatches() {
     try {
-        showLoadingInMatches();
-        const response = await fetch(`${API_BASE}/players/matches/recent/50`);
-        const matchesData = await response.json();
+        const response = await fetch(`${API_BASE}/matches/pending`);
+        const matches = await response.json();
         
-        matches = matchesData;
-        displayMatches(matchesData);
+        pendingMatches = matches;
+        updatePendingMatchesDisplay(matches);
+        
+        // Load players for dropdowns
+        if (players.length === 0) {
+            await loadPlayersForDropdowns();
+        }
+        populatePlayerDropdowns();
     } catch (error) {
-        console.error('Error loading matches:', error);
-        showMessage('Error loading matches', 'error');
-        showEmptyMatches();
+        console.error('Error loading pending matches:', error);
+        showMessage('Error loading pending matches', 'error');
     }
 }
 
-function showLoadingInMatches() {
-    const matchesSection = document.getElementById('matchesSection');
-    matchesSection.innerHTML = `
-        <div class="matches-loading">
-            <i class="fas fa-spinner fa-spin"></i>
-            <h3>Loading matches...</h3>
-        </div>
-    `;
-}
-
-function showEmptyMatches() {
-    const matchesSection = document.getElementById('matchesSection');
-    matchesSection.innerHTML = `
-        <div class="matches-empty">
-            <i class="fas fa-swords"></i>
-            <h3>No matches found</h3>
-            <p>Create a match to get started!</p>
-        </div>
-    `;
-}
-
-function displayMatches(matchesData) {
-    const matchesSection = document.getElementById('matchesSection');
+function updatePendingMatchesDisplay(matches) {
+    const pendingMatchesList = document.getElementById('pendingMatchesList');
     
-    if (matchesData.length === 0) {
-        showEmptyMatches();
+    if (matches.length === 0) {
+        pendingMatchesList.innerHTML = `
+            <div class="empty-pending-matches">
+                <i class="fas fa-check-circle"></i>
+                <h3>No pending matches</h3>
+                <p>All matches have been reported! Create a new match to get started.</p>
+            </div>
+        `;
         return;
     }
 
-    matchesSection.innerHTML = `
-        <div class="match-list">
-            ${matchesData.map(match => createMatchCard(match)).join('')}
-        </div>
-    `;
-}
+    pendingMatchesList.innerHTML = matches.map(match => {
+        const player1Avatar = match.player1_avatar ? 
+            `<img src="${API_BASE.replace('/api', '')}${match.player1_avatar}" alt="${match.player1_name}" class="avatar">` :
+            `<div class="avatar default-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
+                ${match.player1_name.charAt(0).toUpperCase()}
+            </div>`;
 
-function createMatchCard(match) {
-    const player1Avatar = match.player1_avatar ? 
-        `<img src="${API_BASE.replace('/api', '')}${match.player1_avatar}" alt="${match.player1_name}" class="avatar">` :
-        `<div class="avatar default-avatar">${match.player1_name.charAt(0).toUpperCase()}</div>`;
+        const player2Avatar = match.player2_avatar ? 
+            `<img src="${API_BASE.replace('/api', '')}${match.player2_avatar}" alt="${match.player2_name}" class="avatar">` :
+            `<div class="avatar default-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
+                ${match.player2_name.charAt(0).toUpperCase()}
+            </div>`;
 
-    const player2Avatar = match.player2_avatar ? 
-        `<img src="${API_BASE.replace('/api', '')}${match.player2_avatar}" alt="${match.player2_name}" class="avatar">` :
-        `<div class="avatar default-avatar">${match.player2_name.charAt(0).toUpperCase()}</div>`;
-
-    const isPlayer1Winner = match.winner_id === match.player1_id;
-    const isPlayer2Winner = match.winner_id === match.player2_id;
-    const isPending = match.status === 'pending';
-
-    return `
-        <div class="match-item ${match.status}">
-            <div class="match-header">
-                <div class="match-stats">
-                    <span class="match-date">
-                        <i class="fas fa-calendar"></i> ${formatDate(match.match_date)}
-                    </span>
-                    <span class="match-status ${match.status}">${match.status}</span>
-                </div>
-            </div>
-            
-            <div class="match-players-section">
-                <div class="match-player-info">
-                    ${player1Avatar}
-                    <div>
-                        <strong>${match.player1_name}</strong>
-                        ${isPlayer1Winner ? '<div class="winner-indicator">Winner</div>' : ''}
+        return `
+            <div class="pending-match-card">
+                <div class="match-info">
+                    <div class="match-players-info">
+                        <div class="match-player-info">
+                            ${player1Avatar}
+                            <div>
+                                <strong>${match.player1_name}</strong>
+                                <br><small>${match.player1_office}</small>
+                            </div>
+                        </div>
+                        <div class="vs-separator">VS</div>
+                        <div class="match-player-info">
+                            ${player2Avatar}
+                            <div>
+                                <strong>${match.player2_name}</strong>
+                                <br><small>${match.player2_office}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="match-meta">
+                        <i class="fas fa-calendar"></i> Created: ${formatDate(match.match_date)}
+                        <br><span class="match-status pending">Pending</span>
                     </div>
                 </div>
-                
-                <div class="match-vs">VS</div>
-                
-                <div class="match-player-info">
-                    ${player2Avatar}
-                    <div>
-                        <strong>${match.player2_name}</strong>
-                        ${isPlayer2Winner ? '<div class="winner-indicator">Winner</div>' : ''}
-                    </div>
+                <div class="match-actions">
+                    <button class="btn btn-success" onclick="showReportMatchModal(${match.id})">
+                        <i class="fas fa-clipboard-check"></i> Report Result
+                    </button>
                 </div>
             </div>
-            
-            ${match.notes ? `<div class="match-notes"><em>${match.notes}</em></div>` : ''}
-            
-            <div class="match-actions">
-                ${isPending ? `
-                    <button class="btn btn-success btn-small" onclick="showReportMatchModal(${match.id})">
-                        <i class="fas fa-flag-checkered"></i> Report Result
-                    </button>
-                    <button class="btn btn-danger btn-small" onclick="deleteMatch(${match.id})">
-                        <i class="fas fa-trash"></i> Cancel
-                    </button>
-                ` : `
-                    <span class="match-completed">
-                        <i class="fas fa-check-circle"></i> Completed
-                    </span>
-                `}
-            </div>
-        </div>
-    `;
+        `;
+    }).join('');
 }
 
-function filterMatches(filter) {
-    let filteredMatches = matches;
-    
-    if (filter === 'pending') {
-        filteredMatches = matches.filter(m => m.status === 'pending');
-    } else if (filter === 'completed') {
-        filteredMatches = matches.filter(m => m.status === 'completed');
-    }
-    
-    displayMatches(filteredMatches);
-}
-
-// Match Creation
-function showCreateMatchModal() {
-    document.getElementById('createMatchModal').style.display = 'block';
-}
-
-function hideCreateMatchModal() {
-    hideModal('createMatchModal');
-}
-
-async function loadPlayersForMatch() {
-    const office = document.getElementById('matchOffice').value;
-    const player1Select = document.getElementById('matchPlayer1');
-    const player2Select = document.getElementById('matchPlayer2');
-    
-    // Reset both selects
-    player1Select.innerHTML = '<option value="">Select Player 1</option>';
-    player2Select.innerHTML = '<option value="">Select Player 2</option>';
-    
-    if (!office) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/players/office/${office}`);
-        const players = await response.json();
-        
-        players.forEach(player => {
-            const option = `<option value="${player.id}">${player.name}</option>`;
-            player1Select.innerHTML += option;
-        });
-        
-        // Store players for player2 dropdown
-        window.currentOfficePlayers = players;
-    } catch (error) {
-        console.error('Error loading players for match:', error);
-        showMessage('Error loading players', 'error');
-    }
-}
-
-function updatePlayer2Options() {
-    const player1Id = parseInt(document.getElementById('matchPlayer1').value);
-    const player2Select = document.getElementById('matchPlayer2');
-    
-    player2Select.innerHTML = '<option value="">Select Player 2</option>';
-    
-    if (!player1Id || !window.currentOfficePlayers) return;
-    
-    window.currentOfficePlayers.forEach(player => {
-        if (player.id !== player1Id) {
-            const option = `<option value="${player.id}">${player.name}</option>`;
-            player2Select.innerHTML += option;
-        }
-    });
-}
-
-async function handleCreateMatch(e) {
-    e.preventDefault();
-    
-    const matchData = {
-        player1_id: parseInt(document.getElementById('matchPlayer1').value),
-        player2_id: parseInt(document.getElementById('matchPlayer2').value)
-    };
-
-    try {
-        const response = await fetch(`${API_BASE}/matches/create`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(matchData)
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-            showMessage('Match created successfully!', 'success');
-            hideCreateMatchModal();
-            if (currentTab === 'matches') {
-                loadMatches();
-            }
-            loadDashboardData(); // Refresh dashboard stats
-        } else {
-            throw new Error(result.error || 'Failed to create match');
-        }
-    } catch (error) {
-        console.error('Error creating match:', error);
-        showMessage(`Error: ${error.message}`, 'error');
-    }
-}
-
-// Match Reporting
 async function showReportMatchModal(matchId) {
     try {
         const response = await fetch(`${API_BASE}/matches/${matchId}`);
         const match = await response.json();
         
-        if (!response.ok) {
-            throw new Error(match.error || 'Failed to load match details');
-        }
-        
         currentReportingMatch = match;
         
         // Populate match details
-        const reportContent = document.getElementById('reportMatchContent');
+        const matchDetails = document.getElementById('reportMatchDetails');
+        
         const player1Avatar = match.player1_avatar ? 
             `<img src="${API_BASE.replace('/api', '')}${match.player1_avatar}" alt="${match.player1_name}" class="avatar-large">` :
-            `<div class="avatar-large default-avatar">${match.player1_name.charAt(0).toUpperCase()}</div>`;
+            `<div class="avatar-large default-avatar">
+                ${match.player1_name.charAt(0).toUpperCase()}
+            </div>`;
 
         const player2Avatar = match.player2_avatar ? 
             `<img src="${API_BASE.replace('/api', '')}${match.player2_avatar}" alt="${match.player2_name}" class="avatar-large">` :
-            `<div class="avatar-large default-avatar">${match.player2_name.charAt(0).toUpperCase()}</div>`;
-
-        reportContent.innerHTML = `
-            <div class="match-players-section">
+            `<div class="avatar-large default-avatar">
+                ${match.player2_name.charAt(0).toUpperCase()}
+            </div>`;
+        
+        matchDetails.innerHTML = `
+            <h3>Match Details</h3>
+            <div class="match-players-info">
                 <div class="match-player-info">
                     ${player1Avatar}
-                    <div><strong>${match.player1_name}</strong></div>
+                    <div>
+                        <strong>${match.player1_name}</strong>
+                        <br><small>${match.player1_office}</small>
+                    </div>
                 </div>
-                <div class="match-vs">VS</div>
+                <div class="vs-separator">VS</div>
                 <div class="match-player-info">
                     ${player2Avatar}
-                    <div><strong>${match.player2_name}</strong></div>
+                    <div>
+                        <strong>${match.player2_name}</strong>
+                        <br><small>${match.player2_office}</small>
+                    </div>
                 </div>
             </div>
-            <div class="match-date">
-                <i class="fas fa-calendar"></i> ${formatDate(match.match_date)}
-            </div>
+            <p><strong>Created:</strong> ${formatDate(match.match_date)}</p>
         `;
         
         // Populate winner selection
         const winnerSelection = document.getElementById('winnerSelection');
         winnerSelection.innerHTML = `
-            <label class="winner-option">
-                <input type="radio" name="winner" value="${match.player1_id}" required>
-                <div class="winner-player">
+            <div class="winner-option" onclick="selectWinner(${match.player1_id}, this)">
+                <input type="radio" name="winner" value="${match.player1_id}" id="winner1">
+                <div class="player-info">
                     ${player1Avatar}
-                    <strong>${match.player1_name}</strong>
+                    <div class="player-name">${match.player1_name}</div>
                 </div>
-            </label>
-            <label class="winner-option">
-                <input type="radio" name="winner" value="${match.player2_id}" required>
-                <div class="winner-player">
+            </div>
+            <div class="winner-option" onclick="selectWinner(${match.player2_id}, this)">
+                <input type="radio" name="winner" value="${match.player2_id}" id="winner2">
+                <div class="player-info">
                     ${player2Avatar}
-                    <strong>${match.player2_name}</strong>
+                    <div class="player-name">${match.player2_name}</div>
                 </div>
-            </label>
+            </div>
         `;
         
-        // Add click handlers for winner selection
-        document.querySelectorAll('.winner-option').forEach(option => {
-            option.addEventListener('click', function() {
-                document.querySelectorAll('.winner-option').forEach(opt => opt.classList.remove('selected'));
-                this.classList.add('selected');
-                this.querySelector('input[type="radio"]').checked = true;
-            });
-        });
+        // Set match ID
+        document.getElementById('reportMatchId').value = match.id;
         
-        document.getElementById('reportMatchId').value = matchId;
-        document.getElementById('reportMatchModal').style.display = 'block';
+        // Populate reporter dropdown
+        populateReporterDropdown();
         
+        showModal('reportMatchModal');
     } catch (error) {
-        console.error('Error loading match for reporting:', error);
-        showMessage(`Error: ${error.message}`, 'error');
+        console.error('Error loading match details:', error);
+        showMessage('Error loading match details', 'error');
     }
 }
 
-function hideReportMatchModal() {
-    hideModal('reportMatchModal');
-    currentReportingMatch = null;
+function selectWinner(winnerId, element) {
+    // Remove previous selections
+    document.querySelectorAll('.winner-option').forEach(option => {
+        option.classList.remove('selected');
+    });
+    
+    // Select current option
+    element.classList.add('selected');
+    
+    // Set radio button
+    const radio = element.querySelector('input[type="radio"]');
+    radio.checked = true;
 }
 
 async function handleReportMatch(e) {
     e.preventDefault();
     
     const matchId = document.getElementById('reportMatchId').value;
-    const winnerRadio = document.querySelector('input[name="winner"]:checked');
-    const notes = document.getElementById('matchNotes').value;
+    const winnerId = document.querySelector('input[name="winner"]:checked')?.value;
+    const reportedBy = document.getElementById('reportedBySelect').value;
     
-    if (!winnerRadio) {
+    if (!winnerId) {
         showMessage('Please select a winner', 'error');
         return;
     }
     
-    const reportData = {
-        winnerId: parseInt(winnerRadio.value),
-        reportedBy: 1, // This should be the current user's ID in a real app
-        notes: notes
-    };
-
+    if (!reportedBy) {
+        showMessage('Please select who is reporting the match', 'error');
+        return;
+    }
+    
     try {
         const response = await fetch(`${API_BASE}/matches/${matchId}/report`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(reportData)
+            body: JSON.stringify({ winnerId, reportedBy })
         });
-
+        
         const result = await response.json();
-
+        
         if (response.ok) {
-            let message = 'Match result reported successfully!';
+            let message = `Match reported successfully! ${result.match.winnerName} wins!`;
             
-            // Show prize notification if applicable
-            if (result.prize && result.prize.eligible) {
+            if (result.prize) {
+                message += `\n🎉 ${result.prize.message}`;
                 showPrizeNotification(result.prize);
             }
             
             showMessage(message, 'success');
-            hideReportMatchModal();
+            hideModal('reportMatchModal');
             
-            if (currentTab === 'matches') {
-                loadMatches();
+            // Refresh data
+            if (currentTab === 'report') {
+                loadPendingMatches();
             }
-            loadDashboardData(); // Refresh dashboard stats
+            loadDashboardData();
         } else {
             throw new Error(result.error || 'Failed to report match');
         }
@@ -513,55 +383,144 @@ async function handleReportMatch(e) {
 
 function showPrizeNotification(prize) {
     const notification = document.createElement('div');
-    notification.className = 'prize-notification';
+    notification.className = `prize-notification ${prize.type.replace('_', '-')}`;
     notification.innerHTML = `
         <i class="fas fa-trophy"></i>
-        <strong>🎉 ${prize.message} 🎉</strong>
-        <br>
-        <small>Current record: ${prize.wins} wins, ${prize.losses} losses</small>
+        <strong>Prize Earned!</strong><br>
+        ${prize.message}
     `;
     
-    document.body.appendChild(notification);
-    notification.style.position = 'fixed';
-    notification.style.top = '20px';
-    notification.style.left = '50%';
-    notification.style.transform = 'translateX(-50%)';
-    notification.style.zIndex = '1000';
-    notification.style.maxWidth = '400px';
+    document.querySelector('.container').appendChild(notification);
     
+    // Auto-hide after 8 seconds
     setTimeout(() => {
         notification.remove();
-    }, 5000);
+    }, 8000);
 }
 
-async function deleteMatch(matchId) {
-    if (!confirm('Are you sure you want to delete this match? This action cannot be undone.')) {
+// Create Match Functions
+function showCreateMatchModal() {
+    if (players.length === 0) {
+        loadPlayersForDropdowns().then(() => {
+            populatePlayerDropdowns();
+            showModal('createMatchModal');
+        });
+    } else {
+        populatePlayerDropdowns();
+        showModal('createMatchModal');
+    }
+}
+
+function populatePlayerDropdowns() {
+    const player1Select = document.getElementById('player1Select');
+    const player2Select = document.getElementById('player2Select');
+    
+    const playerOptions = players.map(player => 
+        `<option value="${player.id}">${player.name} (${player.office})</option>`
+    ).join('');
+    
+    player1Select.innerHTML = '<option value="">Select Player 1</option>' + playerOptions;
+    player2Select.innerHTML = '<option value="">Select Player 2</option>' + playerOptions;
+}
+
+function populateReporterDropdown() {
+    const reportedBySelect = document.getElementById('reportedBySelect');
+    
+    const playerOptions = players.map(player => 
+        `<option value="${player.id}">${player.name}</option>`
+    ).join('');
+    
+    reportedBySelect.innerHTML = '<option value="">Select who is reporting</option>' + playerOptions;
+}
+
+async function handleCreateMatch(e) {
+    e.preventDefault();
+    
+    const player1Id = document.getElementById('player1Select').value;
+    const player2Id = document.getElementById('player2Select').value;
+    
+    if (!player1Id || !player2Id) {
+        showMessage('Please select both players', 'error');
+        return;
+    }
+    
+    if (player1Id === player2Id) {
+        showMessage('Players cannot play against themselves', 'error');
         return;
     }
     
     try {
-        const response = await fetch(`${API_BASE}/matches/${matchId}`, {
-            method: 'DELETE'
+        const response = await fetch(`${API_BASE}/matches/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ player1Id, player2Id })
         });
-
+        
         const result = await response.json();
-
+        
         if (response.ok) {
-            showMessage('Match deleted successfully', 'success');
-            if (currentTab === 'matches') {
-                loadMatches();
+            showMessage('Match created successfully!', 'success');
+            hideModal('createMatchModal');
+            
+            // Refresh data
+            if (currentTab === 'report') {
+                loadPendingMatches();
             }
-            loadDashboardData(); // Refresh dashboard stats
+            loadDashboardData();
         } else {
-            throw new Error(result.error || 'Failed to delete match');
+            throw new Error(result.error || 'Failed to create match');
         }
     } catch (error) {
-        console.error('Error deleting match:', error);
+        console.error('Error creating match:', error);
         showMessage(`Error: ${error.message}`, 'error');
     }
 }
 
-// ... (keep all existing functions from previous script.js) ...
+// ... (keep all existing functions from previous script.js)
+
+async function loadPlayersForDropdowns() {
+    if (players.length === 0) {
+        try {
+            const response = await fetch(`${API_BASE}/players`);
+            players = await response.json();
+        } catch (error) {
+            console.error('Error loading players:', error);
+        }
+    }
+}
+
+// Modal helper functions
+function showModal(modalId) {
+    document.getElementById(modalId).style.display = 'block';
+}
+
+function hideModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    
+    // Reset forms
+    const form = document.querySelector(`#${modalId} form`);
+    if (form) {
+        form.reset();
+    }
+    
+    // Clear selections
+    document.querySelectorAll('.winner-option').forEach(option => {
+        option.classList.remove('selected');
+    });
+}
+
+function hideCreateMatchModal() {
+    hideModal('createMatchModal');
+}
+
+function hideReportMatchModal() {
+    hideModal('reportMatchModal');
+    currentReportingMatch = null;
+}
+
+// ... (keep all other existing functions)
 
 async function loadLeaderboard(office = '') {
     try {
@@ -684,6 +643,76 @@ function updatePlayersDisplay(data) {
     }).join('');
 }
 
+async function loadRecentMatches() {
+    try {
+        const response = await fetch(`${API_BASE}/players/matches/recent/20`);
+        const matches = await response.json();
+        
+        updateMatchesDisplay(matches);
+    } catch (error) {
+        console.error('Error loading recent matches:', error);
+        showMessage('Error loading recent matches', 'error');
+    }
+}
+
+function updateMatchesDisplay(matches) {
+    const matchesSection = document.getElementById('matchesSection');
+    
+    if (matches.length === 0) {
+        matchesSection.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-gamepad"></i>
+                <h3>No completed matches yet</h3>
+                <p>Matches will appear here once players start competing!</p>
+            </div>
+        `;
+        return;
+    }
+
+    matchesSection.innerHTML = matches.map(match => {
+        const player1Avatar = match.player1_avatar ? 
+            `<img src="${API_BASE.replace('/api', '')}${match.player1_avatar}" alt="${match.player1_name}" class="avatar">` :
+            `<div class="avatar default-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
+                ${match.player1_name.charAt(0).toUpperCase()}
+            </div>`;
+
+        const player2Avatar = match.player2_avatar ? 
+            `<img src="${API_BASE.replace('/api', '')}${match.player2_avatar}" alt="${match.player2_name}" class="avatar">` :
+            `<div class="avatar default-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
+                ${match.player2_name.charAt(0).toUpperCase()}
+            </div>`;
+
+        const isPlayer1Winner = match.winner_id === match.player1_id;
+        const isPlayer2Winner = match.winner_id === match.player2_id;
+
+        return `
+            <div class="match-card">
+                <div class="match-players">
+                    <div class="match-player">
+                        ${player1Avatar}
+                        <div>
+                            <strong>${match.player1_name}</strong>
+                            ${isPlayer1Winner ? '<div class="winner-indicator">Winner</div>' : ''}
+                        </div>
+                    </div>
+                    <div class="match-vs">VS</div>
+                    <div class="match-player">
+                        ${player2Avatar}
+                        <div>
+                            <strong>${match.player2_name}</strong>
+                            ${isPlayer2Winner ? '<div class="winner-indicator">Winner</div>' : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="match-date">
+                    <i class="fas fa-calendar"></i> ${formatDate(match.match_date)}
+                    ${match.reported_by_name ? `<br><small>Reported by: ${match.reported_by_name}</small>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 async function loadMatchmakingQueue() {
     const queueSection = document.getElementById('queueSection');
     
@@ -713,7 +742,7 @@ async function loadMatchmakingQueue() {
     }, 1000);
 }
 
-// Player Management Functions (keep existing ones)
+// Player Management Functions (keep existing)
 async function editPlayer(playerId) {
     try {
         const response = await fetch(`${API_BASE}/players/${playerId}`);
@@ -741,7 +770,7 @@ async function editPlayer(playerId) {
             deleteBtn.style.display = 'none';
         }
         
-        showEditPlayerModal();
+        showModal('editPlayerModal');
     } catch (error) {
         console.error('Error loading player:', error);
         showMessage('Error loading player details', 'error');
@@ -772,7 +801,7 @@ async function handleEditPlayer(e) {
 
         if (response.ok) {
             showMessage('Player updated successfully!', 'success');
-            hideEditPlayerModal();
+            hideModal('editPlayerModal');
             if (currentTab === 'players') {
                 loadPlayers();
             }
@@ -887,9 +916,9 @@ async function deleteAvatar() {
     }
 }
 
-// Modal Functions
+// Modal Functions (keep existing)
 function showAddPlayerModal() {
-    document.getElementById('addPlayerModal').style.display = 'block';
+    showModal('addPlayerModal');
 }
 
 function hideAddPlayerModal() {
@@ -897,7 +926,7 @@ function hideAddPlayerModal() {
 }
 
 function showEditPlayerModal() {
-    document.getElementById('editPlayerModal').style.display = 'block';
+    showModal('editPlayerModal');
 }
 
 function hideEditPlayerModal() {
@@ -919,3 +948,52 @@ async function handleAddPlayer(e) {
         const response = await fetch(`${API_BASE}/players`, {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(playerData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showMessage('Player added successfully!', 'success');
+            hideModal('addPlayerModal');
+            if (currentTab === 'players') {
+                loadPlayers();
+            }
+            loadDashboardData(); // Refresh dashboard stats
+        } else {
+            throw new Error(result.error || 'Failed to add player');
+        }
+    } catch (error) {
+        console.error('Error adding player:', error);
+        showMessage(`Error: ${error.message}`, 'error');
+    }
+}
+
+function showMessage(text, type = 'info') {
+    // Remove existing messages
+    document.querySelectorAll('.message').forEach(msg => msg.remove());
+    
+    const message = document.createElement('div');
+    message.className = `message ${type}`;
+    message.textContent = text;
+    
+    const container = document.querySelector('.container');
+    container.insertBefore(message, container.firstChild);
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        message.remove();
+    }, 5000);
+}
+
+// Utility functions
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+function capitalize(str) {
+    return str.replace(/\b\w/g, l => l.toUpperCase());
+}
