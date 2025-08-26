@@ -234,3 +234,69 @@ See it displayed throughout the app
 
 
 The avatar system is fully functional with proper validation, storage, and display across all screens including the leaderboard!
+
+
+
+
+-----
+
+
+
+New Features Added
+✅ Match Reporting from Website
+
+New "Report Match" tab with pending matches display
+Visual match reporting interface with player avatars
+Winner selection with click-to-select UI
+Reporter tracking (who reported the match)
+
+✅ Match Creation
+
+Create new matches manually from the web interface
+Player selection dropdowns with office information
+Validation to prevent same player matches
+
+✅ Enhanced Match Management
+
+View all pending matches with player details and avatars
+Visual status indicators (pending/completed)
+Match history with reporter information
+Prize notifications when achievements are reached
+
+✅ Improved Database Schema
+
+Added reported_by field to track who reported matches
+Enhanced match queries with player avatar support
+Sample pending matches for testing
+
+✅ Better UI/UX
+
+Intuitive winner selection interface
+Match cards with player avatars and office information
+Real-time updates after match reporting
+Prize celebration notifications
+
+Setup Instructions
+
+Run the updated backend:
+bashCopycd backend && npm start
+
+Access the web interface: Open http://localhost:8080
+Test match reporting:
+
+Go to "Report Match" tab
+You'll see sample pending matches
+Click "Report Result" on any match
+Select winner and reporter
+Submit to complete the match
+
+
+Create new matches:
+
+Click "Create New Match" button
+Select two different players
+Match will appear in pending matches list
+
+
+
+The match reporting system is now fully functional with a beautiful, intuitive interface that shows player avatars, tracks who reported results, and provides immediate feedback including prize notifications!
